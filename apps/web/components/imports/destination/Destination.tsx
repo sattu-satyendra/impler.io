@@ -1,6 +1,6 @@
-import { Controller } from 'react-hook-form';
+import { Controller, useWatch } from 'react-hook-form';
 import { DestinationsEnum, ITemplate } from '@impler/shared';
-import { Stack, TextInput as Input, Group, Select, Flex, Badge } from '@mantine/core';
+import { Stack, TextInput as Input, Group, Select, Flex, Badge, Switch } from '@mantine/core';
 import { Button } from '@ui/button';
 import { colors, ROUTES } from '@config';
 import { NumberInput } from '@ui/number-input';
@@ -35,6 +35,8 @@ export function Destination({ template }: DestinationProps) {
   } = useDestination({
     template,
   });
+
+  const singleRecordMode = useWatch({ control, name: 'webhook.singleRecordMode' });
 
   const swithDestination = (newDestination: DestinationsEnum) => {
     if (destination === newDestination)
@@ -94,20 +96,35 @@ export function Destination({ template }: DestinationProps) {
 
             <Controller
               control={control}
-              name="webhook.chunkSize"
+              name="webhook.singleRecordMode"
               render={({ field }) => (
-                <NumberInput
-                  required
-                  label="Chunk Size"
-                  placeholder="100"
-                  register={{
-                    value: field.value,
-                    onChange: field.onChange,
-                  }}
-                  error={errors.webhook?.chunkSize?.message}
+                <Switch
+                  label="Single Record Mode"
+                  description="Send each record as an individual API call instead of batching"
+                  checked={field.value || false}
+                  onChange={(event) => field.onChange(event.currentTarget.checked)}
                 />
               )}
             />
+
+            {!singleRecordMode && (
+              <Controller
+                control={control}
+                name="webhook.chunkSize"
+                render={({ field }) => (
+                  <NumberInput
+                    required
+                    label="Chunk Size"
+                    placeholder="100"
+                    register={{
+                      value: field.value,
+                      onChange: field.onChange,
+                    }}
+                    error={errors.webhook?.chunkSize?.message}
+                  />
+                )}
+              />
+            )}
 
             <Group grow>
               {webhookRetrySettingsUnavailable ? (

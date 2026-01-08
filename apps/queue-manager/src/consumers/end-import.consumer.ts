@@ -47,7 +47,6 @@ export class EndImportConsumer extends BaseConsumer {
   private async convertRecordsToJsonFile(uploadId: string, uploadedFileId?: string): Promise<void> {
     try {
       const jsonStream = this.dalService.getRecordsStream(uploadId);
-
       const allJsonDataFilePath = this.fileNameService.getAllJsonDataFilePath(uploadId);
       await this.storageService.uploadFile(allJsonDataFilePath, jsonStream, FileMimeTypesEnum.JSON);
       await this.dalService.dropRecordCollection(uploadId);
@@ -78,6 +77,7 @@ export class EndImportConsumer extends BaseConsumer {
       }
     } catch (error) {
       Sentry.captureException(error);
+      throw error;
     }
   }
 

@@ -9,6 +9,7 @@ import {
   IsObject,
   IsNotEmptyObject,
   ValidateNested,
+  IsBoolean,
 } from 'class-validator';
 import { DestinationsEnum } from '@impler/shared';
 import { Type } from 'class-transformer';
@@ -35,6 +36,10 @@ class WebhookDestinationObject {
   @IsOptional()
   @IsNumber()
   retryCount?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  singleRecordMode?: boolean;
 }
 
 class BubbleIoDestinationObject {

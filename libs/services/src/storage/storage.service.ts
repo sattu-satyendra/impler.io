@@ -44,6 +44,21 @@ async function streamToString(stream: Readable, encoding: BufferEncoding): Promi
   });
 }
 
+async function streamToBuffer(stream: Readable): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    stream.on('data', (chunk) => {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    });
+    stream.on('error', (error) => {
+      reject(new Error(`Failed to buffer stream: ${error.message}`));
+    });
+    stream.on('end', () => {
+      resolve(Buffer.concat(chunks));
+    });
+  });
+}
+
 export class S3StorageService implements StorageService {
   private isS3Connected = false;
   private s3 = new S3Client({
@@ -109,10 +124,13 @@ export class S3StorageService implements StorageService {
   }
 
   async uploadFile(key: string, file: Buffer | string | Readable, contentType: string): Promise<IStorageResponse> {
+    // S3 requires content-length for uploads, so we must buffer streams
+    const body: Buffer | string = file instanceof Readable ? await streamToBuffer(file) : file;
+
     const command = new PutObjectCommand({
       Bucket: process.env.S3_BUCKET_NAME,
       Key: key,
-      Body: file,
+      Body: body,
       ContentType: contentType,
     });
 

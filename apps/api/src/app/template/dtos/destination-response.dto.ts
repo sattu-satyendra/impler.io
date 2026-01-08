@@ -9,6 +9,7 @@ export class DestinationResponseDto {
     chunkSize?: number;
     retryInterval?: number;
     retryCount?: number;
+    singleRecordMode?: boolean;
   };
   bubbleio?: {
     bubbleAppUrl: string;

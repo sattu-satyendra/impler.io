@@ -16,6 +16,7 @@ export interface IWebhookData {
   chunkSize: number;
   retryInterval?: number;
   retryCount?: number;
+  singleRecordMode?: boolean;
 }
 
 export interface IBubbleData {

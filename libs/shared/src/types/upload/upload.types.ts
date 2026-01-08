@@ -75,6 +75,7 @@ export type CommonCachedData = {
   multiSelectHeadings?: Record<string, string>;
   imageHeadings?: string[];
   isInvalidRecords?: boolean;
+  singleRecordMode?: boolean;
 };
 
 export type SendWebhookCachedData = {

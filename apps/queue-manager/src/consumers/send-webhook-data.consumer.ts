@@ -63,73 +63,203 @@ export class SendWebhookDataConsumer extends BaseConsumer {
         }
         if (!(Array.isArray(allDataJson) && allDataJson.length > 0)) return;
 
-        const totalPages = this.getTotalPages(allDataJson.length, cachedData.chunkSize);
-        let currentPage = cachedData.page || DEFAULT_PAGE;
-        const startPage = currentPage;
-        const PAGES_TO_PROCESS = 50; // Process 50 pages per message to speed up but allow heartbeats
+        const headers =
+          cachedData.authHeaderName && cachedData.authHeaderValue
+            ? { [cachedData.authHeaderName]: cachedData.authHeaderValue }
+            : null;
 
-        while (currentPage <= totalPages && currentPage < startPage + PAGES_TO_PROCESS) {
-          const { sendData, page } = this.buildSendData({
+        if (cachedData.singleRecordMode) {
+          // Single record mode: send each record individually
+          await this.processSingleRecordMode({
+            allDataJson,
+            cachedData,
             uploadId,
-            data: allDataJson,
-            extra: cachedData.extra,
-            template: cachedData.name,
-            fileName: cachedData.fileName,
-            chunkSize: cachedData.chunkSize,
-            defaultValues: cachedData.defaultValues,
-            page: currentPage,
-            recordFormat: cachedData.recordFormat,
-            chunkFormat: cachedData.chunkFormat,
-            totalRecords: allDataJson.length,
-            imageHeadings: cachedData.imageHeadings,
-            multiSelectHeadings: cachedData.multiSelectHeadings,
-          });
-
-          const headers =
-            cachedData.authHeaderName && cachedData.authHeaderValue
-              ? { [cachedData.authHeaderName]: cachedData.authHeaderValue }
-              : null;
-
-          const allData = {
-            data: sendData,
-            uploadId,
-            page,
-            method: 'POST',
-            url: cachedData.callbackUrl,
             headers,
             isRetry,
-          };
-
-          const response = await this.makeApiCall(allData);
-
-          await this.makeResponseEntry({
-            data: response,
-            projectId: cachedData.projectId,
-            importName: cachedData.name,
-            url: cachedData.callbackUrl,
-            retryInterval: cachedData.retryInterval,
-            retryCount: cachedData.retryCount,
-            allData,
-          });
-
-          currentPage += 1;
-        }
-
-        if (currentPage <= totalPages) {
-          // Queue next batch
-          publishToQueue(QueuesEnum.SEND_WEBHOOK_DATA, {
-            uploadId,
-            cache: {
-              ...cachedData,
-              page: currentPage,
-            },
           });
         } else {
-          // Processing is done
-          this.finalizeUpload(uploadId);
+          // Default chunked mode
+          await this.processChunkedMode({
+            allDataJson,
+            cachedData,
+            uploadId,
+            headers,
+            isRetry,
+          });
         }
       }
-    } catch (error) {}
+    } catch (error) {
+      console.error('SendWebhookDataConsumer error:', error);
+    }
+  }
+
+  private async processSingleRecordMode({
+    allDataJson,
+    cachedData,
+    uploadId,
+    headers,
+    isRetry,
+  }: {
+    allDataJson: any[];
+    cachedData: SendWebhookCachedData;
+    uploadId: string;
+    headers: Record<string, string> | null;
+    isRetry: boolean;
+  }) {
+    const defaultValuesObj = JSON.parse(cachedData.defaultValues);
+    const RECORDS_TO_PROCESS = 50; // Process 50 records per message to allow heartbeats
+    let currentIndex = cachedData.page ? cachedData.page - 1 : 0; // Use page as record index
+    const startIndex = currentIndex;
+
+    while (currentIndex < allDataJson.length && currentIndex < startIndex + RECORDS_TO_PROCESS) {
+      const recordObj = allDataJson[currentIndex];
+
+      // Apply transformations
+      this.applyRecordTransformations(recordObj, cachedData.multiSelectHeadings, cachedData.imageHeadings, uploadId);
+
+      // Apply record format if exists, otherwise use raw record
+      let sendData: Record<string, unknown>;
+      if (cachedData.recordFormat) {
+        sendData = replaceVariablesInObject(JSON.parse(cachedData.recordFormat), recordObj.record, defaultValuesObj);
+      } else {
+        sendData = recordObj.record;
+      }
+
+      const allData = {
+        data: sendData,
+        uploadId,
+        page: currentIndex + 1, // 1-indexed for logging
+        method: 'POST',
+        url: cachedData.callbackUrl,
+        headers,
+        isRetry,
+      };
+
+      const response = await this.makeApiCall(allData);
+
+      await this.makeResponseEntry({
+        data: response,
+        projectId: cachedData.projectId,
+        importName: cachedData.name,
+        url: cachedData.callbackUrl,
+        retryInterval: cachedData.retryInterval,
+        retryCount: cachedData.retryCount,
+        allData,
+      });
+
+      currentIndex += 1;
+    }
+
+    if (currentIndex < allDataJson.length) {
+      // Queue next batch of records
+      publishToQueue(QueuesEnum.SEND_WEBHOOK_DATA, {
+        uploadId,
+        cache: {
+          ...cachedData,
+          page: currentIndex + 1, // Store next index as 1-indexed page
+        },
+      });
+    } else {
+      // Processing is done
+      this.finalizeUpload(uploadId);
+    }
+  }
+
+  private async processChunkedMode({
+    allDataJson,
+    cachedData,
+    uploadId,
+    headers,
+    isRetry,
+  }: {
+    allDataJson: any[];
+    cachedData: SendWebhookCachedData;
+    uploadId: string;
+    headers: Record<string, string> | null;
+    isRetry: boolean;
+  }) {
+    const totalPages = this.getTotalPages(allDataJson.length, cachedData.chunkSize);
+    let currentPage = cachedData.page || DEFAULT_PAGE;
+    const startPage = currentPage;
+    const PAGES_TO_PROCESS = 50; // Process 50 pages per message to speed up but allow heartbeats
+
+    while (currentPage <= totalPages && currentPage < startPage + PAGES_TO_PROCESS) {
+      const { sendData, page } = this.buildSendData({
+        uploadId,
+        data: allDataJson,
+        extra: cachedData.extra,
+        template: cachedData.name,
+        fileName: cachedData.fileName,
+        chunkSize: cachedData.chunkSize,
+        defaultValues: cachedData.defaultValues,
+        page: currentPage,
+        recordFormat: cachedData.recordFormat,
+        chunkFormat: cachedData.chunkFormat,
+        totalRecords: allDataJson.length,
+        imageHeadings: cachedData.imageHeadings,
+        multiSelectHeadings: cachedData.multiSelectHeadings,
+      });
+
+      const allData = {
+        data: sendData,
+        uploadId,
+        page,
+        method: 'POST',
+        url: cachedData.callbackUrl,
+        headers,
+        isRetry,
+      };
+
+      const response = await this.makeApiCall(allData);
+
+      await this.makeResponseEntry({
+        data: response,
+        projectId: cachedData.projectId,
+        importName: cachedData.name,
+        url: cachedData.callbackUrl,
+        retryInterval: cachedData.retryInterval,
+        retryCount: cachedData.retryCount,
+        allData,
+      });
+
+      currentPage += 1;
+    }
+
+    if (currentPage <= totalPages) {
+      // Queue next batch
+      publishToQueue(QueuesEnum.SEND_WEBHOOK_DATA, {
+        uploadId,
+        cache: {
+          ...cachedData,
+          page: currentPage,
+        },
+      });
+    } else {
+      // Processing is done
+      this.finalizeUpload(uploadId);
+    }
+  }
+
+  private applyRecordTransformations(
+    recordObj: { record: Record<string, unknown> },
+    multiSelectHeadings: Record<string, string> | undefined,
+    imageHeadings: string[] | undefined,
+    uploadId: string
+  ): void {
+    if ((multiSelectHeadings && Object.keys(multiSelectHeadings).length > 0) || imageHeadings?.length > 0) {
+      Object.keys(multiSelectHeadings || {}).forEach((heading) => {
+        const value = recordObj.record[heading];
+        recordObj.record[heading] = value ? String(value).split(multiSelectHeadings[heading]) : [];
+      });
+
+      if (imageHeadings?.length > 0) {
+        imageHeadings.forEach((heading) => {
+          recordObj.record[heading] = recordObj.record[heading]
+            ? `${process.env.API_ROOT_URL}/v1/upload/${uploadId}/asset/${recordObj.record[heading]}`
+            : '';
+        });
+      }
+    }
   }
 
   private buildSendData({
@@ -147,40 +277,29 @@ export class SendWebhookDataConsumer extends BaseConsumer {
     multiSelectHeadings,
   }: IBuildSendDataParameters): { sendData: Record<string, unknown>; page: number } {
     const defaultValuesObj = JSON.parse(defaultValues);
-    let slicedData = data.slice(
+    const slicedData = data.slice(
       Math.max((page - DEFAULT_PAGE) * chunkSize, MIN_LIMIT),
       Math.min(page * chunkSize, data.length)
     );
-    if ((multiSelectHeadings && Object.keys(multiSelectHeadings).length > 0) || imageHeadings?.length > 0) {
-      slicedData = slicedData.map((obj) => {
-        Object.keys(multiSelectHeadings).forEach((heading) => {
-          obj.record[heading] = obj.record[heading] ? obj.record[heading].split(multiSelectHeadings[heading]) : [];
-        });
 
-        if (imageHeadings?.length > 0)
-          imageHeadings.forEach((heading) => {
-            obj.record[heading] = obj.record[heading]
-              ? `${process.env.API_ROOT_URL}/v1/upload/${uploadId}/asset/${obj.record[heading]}`
-              : '';
-          });
+    // Apply multiSelect and image transformations
+    slicedData.forEach((obj) => {
+      this.applyRecordTransformations(obj, multiSelectHeadings, imageHeadings, uploadId);
+    });
 
-        return obj;
-      });
-    }
-    if (recordFormat)
-      slicedData = slicedData.map((obj) =>
-        replaceVariablesInObject(JSON.parse(recordFormat), obj.record, defaultValuesObj)
-      );
-    else slicedData = slicedData.map((obj) => obj.record);
+    // Apply record format transformation
+    const transformedData = recordFormat
+      ? slicedData.map((obj) => replaceVariablesInObject(JSON.parse(recordFormat), obj.record, defaultValuesObj))
+      : slicedData.map((obj) => obj.record);
 
     const sendData = {
       page,
       fileName,
       template,
       uploadId,
-      data: slicedData,
+      data: transformedData,
       totalRecords: data.length,
-      chunkSize: slicedData.length,
+      chunkSize: transformedData.length,
       extra: extra ? JSON.parse(extra) : '',
       totalPages: this.getTotalPages(data.length, chunkSize),
     };
@@ -237,6 +356,7 @@ export class SendWebhookDataConsumer extends BaseConsumer {
       multiSelectHeadings,
       imageHeadings,
       email: userEmail,
+      singleRecordMode: webhookDestination?.singleRecordMode,
     };
   }
 
