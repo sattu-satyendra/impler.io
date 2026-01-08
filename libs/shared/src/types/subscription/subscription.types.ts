@@ -42,6 +42,18 @@ export interface ISubscriptionData {
     DEFAULT_VALUES?: boolean;
     RUNTIME_SCHEMA?: boolean;
     DATA_SEEDING?: boolean;
+    IMAGE_IMPORT?: boolean;
+    UNIQUE_VALUES?: boolean;
+    DATE_FORMATS?: boolean;
+    BUBBLE_INTEGRATION?: boolean;
+    ALTERNATE_COLUMN_KEYS?: boolean;
+    MULTI_SELECT_VALUES?: boolean;
+    CUSTOM_CODE_VALIDATOR?: boolean;
+    LENGTH_VALIDATION?: boolean;
+    RANGE_VALIDATION?: boolean;
+    DIGITS_VALIDATION?: boolean;
+    MULTIPLE_COLUMNS_COMBINATION_UNIQUE_VALIDATION?: boolean;
+    WEBHOOK_RETRY_SETTINGS?: boolean;
   };
   customer?: {
     paymentMethodCurrency?: string;
