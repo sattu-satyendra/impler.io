@@ -104,7 +104,7 @@ export type SendBubbleData = {
 };
 
 export interface ISendDataParameters {
-  data: string | Record<string, unknown>;
+  data: string | Record<string, unknown> | Record<string, unknown>[];
   url: string;
   page: number;
   method?: 'POST' | string;
