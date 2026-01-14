@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/node';
 import {
   FileEncodingsEnum,
   SendWebhookCachedData,
@@ -89,7 +90,12 @@ export class SendWebhookDataConsumer extends BaseConsumer {
         }
       }
     } catch (error) {
+      Sentry.captureException(error, {
+        tags: { consumer: 'SendWebhookDataConsumer', uploadId },
+        extra: { isRetry },
+      });
       console.error('SendWebhookDataConsumer error:', error);
+      await this.handleInfrastructureError(uploadId, error);
     }
   }
 
@@ -111,57 +117,65 @@ export class SendWebhookDataConsumer extends BaseConsumer {
     let currentIndex = cachedData.page ? cachedData.page - 1 : 0; // Use page as record index
     const startIndex = currentIndex;
 
-    while (currentIndex < allDataJson.length && currentIndex < startIndex + RECORDS_TO_PROCESS) {
-      const recordObj = allDataJson[currentIndex];
+    try {
+      while (currentIndex < allDataJson.length && currentIndex < startIndex + RECORDS_TO_PROCESS) {
+        const recordObj = allDataJson[currentIndex];
 
-      // Apply transformations
-      this.applyRecordTransformations(recordObj, cachedData.multiSelectHeadings, cachedData.imageHeadings, uploadId);
+        // Apply transformations
+        this.applyRecordTransformations(recordObj, cachedData.multiSelectHeadings, cachedData.imageHeadings, uploadId);
 
-      // Apply record format if exists, otherwise use raw record
-      let sendData: Record<string, unknown>;
-      if (cachedData.recordFormat) {
-        sendData = replaceVariablesInObject(JSON.parse(cachedData.recordFormat), recordObj.record, defaultValuesObj);
-      } else {
-        sendData = recordObj.record;
+        // Apply record format if exists, otherwise use raw record
+        let sendData: Record<string, unknown>;
+        if (cachedData.recordFormat) {
+          sendData = replaceVariablesInObject(JSON.parse(cachedData.recordFormat), recordObj.record, defaultValuesObj);
+        } else {
+          sendData = recordObj.record;
+        }
+
+        const allData = {
+          data: sendData,
+          uploadId,
+          page: currentIndex + 1, // 1-indexed for logging
+          method: 'POST',
+          url: cachedData.callbackUrl,
+          headers,
+          isRetry,
+        };
+
+        const response = await this.makeApiCall(allData);
+
+        await this.makeResponseEntry({
+          data: response,
+          projectId: cachedData.projectId,
+          importName: cachedData.name,
+          url: cachedData.callbackUrl,
+          retryInterval: cachedData.retryInterval,
+          retryCount: cachedData.retryCount,
+          allData,
+        });
+
+        currentIndex += 1;
       }
 
-      const allData = {
-        data: sendData,
-        uploadId,
-        page: currentIndex + 1, // 1-indexed for logging
-        method: 'POST',
-        url: cachedData.callbackUrl,
-        headers,
-        isRetry,
-      };
-
-      const response = await this.makeApiCall(allData);
-
-      await this.makeResponseEntry({
-        data: response,
-        projectId: cachedData.projectId,
-        importName: cachedData.name,
-        url: cachedData.callbackUrl,
-        retryInterval: cachedData.retryInterval,
-        retryCount: cachedData.retryCount,
-        allData,
+      if (currentIndex < allDataJson.length) {
+        // Queue next batch of records
+        publishToQueue(QueuesEnum.SEND_WEBHOOK_DATA, {
+          uploadId,
+          cache: {
+            ...cachedData,
+            page: currentIndex + 1, // Store next index as 1-indexed page
+          },
+        });
+      } else {
+        // Processing is done
+        this.finalizeUpload(uploadId);
+      }
+    } catch (error) {
+      Sentry.captureException(error, {
+        tags: { consumer: 'SendWebhookDataConsumer', uploadId, method: 'processSingleRecordMode' },
+        extra: { currentIndex, totalRecords: allDataJson.length },
       });
-
-      currentIndex += 1;
-    }
-
-    if (currentIndex < allDataJson.length) {
-      // Queue next batch of records
-      publishToQueue(QueuesEnum.SEND_WEBHOOK_DATA, {
-        uploadId,
-        cache: {
-          ...cachedData,
-          page: currentIndex + 1, // Store next index as 1-indexed page
-        },
-      });
-    } else {
-      // Processing is done
-      this.finalizeUpload(uploadId);
+      throw error; // Re-throw to be handled by message() catch block
     }
   }
 
@@ -183,61 +197,69 @@ export class SendWebhookDataConsumer extends BaseConsumer {
     const startPage = currentPage;
     const PAGES_TO_PROCESS = 50; // Process 50 pages per message to speed up but allow heartbeats
 
-    while (currentPage <= totalPages && currentPage < startPage + PAGES_TO_PROCESS) {
-      const { sendData, page } = this.buildSendData({
-        uploadId,
-        data: allDataJson,
-        extra: cachedData.extra,
-        template: cachedData.name,
-        fileName: cachedData.fileName,
-        chunkSize: cachedData.chunkSize,
-        defaultValues: cachedData.defaultValues,
-        page: currentPage,
-        recordFormat: cachedData.recordFormat,
-        chunkFormat: cachedData.chunkFormat,
-        totalRecords: allDataJson.length,
-        imageHeadings: cachedData.imageHeadings,
-        multiSelectHeadings: cachedData.multiSelectHeadings,
-        flatArrayMode: cachedData.flatArrayMode,
-      });
-
-      const allData = {
-        data: sendData,
-        uploadId,
-        page,
-        method: 'POST',
-        url: cachedData.callbackUrl,
-        headers,
-        isRetry,
-      };
-
-      const response = await this.makeApiCall(allData);
-
-      await this.makeResponseEntry({
-        data: response,
-        projectId: cachedData.projectId,
-        importName: cachedData.name,
-        url: cachedData.callbackUrl,
-        retryInterval: cachedData.retryInterval,
-        retryCount: cachedData.retryCount,
-        allData,
-      });
-
-      currentPage += 1;
-    }
-
-    if (currentPage <= totalPages) {
-      // Queue next batch
-      publishToQueue(QueuesEnum.SEND_WEBHOOK_DATA, {
-        uploadId,
-        cache: {
-          ...cachedData,
+    try {
+      while (currentPage <= totalPages && currentPage < startPage + PAGES_TO_PROCESS) {
+        const { sendData, page } = this.buildSendData({
+          uploadId,
+          data: allDataJson,
+          extra: cachedData.extra,
+          template: cachedData.name,
+          fileName: cachedData.fileName,
+          chunkSize: cachedData.chunkSize,
+          defaultValues: cachedData.defaultValues,
           page: currentPage,
-        },
+          recordFormat: cachedData.recordFormat,
+          chunkFormat: cachedData.chunkFormat,
+          totalRecords: allDataJson.length,
+          imageHeadings: cachedData.imageHeadings,
+          multiSelectHeadings: cachedData.multiSelectHeadings,
+          flatArrayMode: cachedData.flatArrayMode,
+        });
+
+        const allData = {
+          data: sendData,
+          uploadId,
+          page,
+          method: 'POST',
+          url: cachedData.callbackUrl,
+          headers,
+          isRetry,
+        };
+
+        const response = await this.makeApiCall(allData);
+
+        await this.makeResponseEntry({
+          data: response,
+          projectId: cachedData.projectId,
+          importName: cachedData.name,
+          url: cachedData.callbackUrl,
+          retryInterval: cachedData.retryInterval,
+          retryCount: cachedData.retryCount,
+          allData,
+        });
+
+        currentPage += 1;
+      }
+
+      if (currentPage <= totalPages) {
+        // Queue next batch
+        publishToQueue(QueuesEnum.SEND_WEBHOOK_DATA, {
+          uploadId,
+          cache: {
+            ...cachedData,
+            page: currentPage,
+          },
+        });
+      } else {
+        // Processing is done
+        this.finalizeUpload(uploadId);
+      }
+    } catch (error) {
+      Sentry.captureException(error, {
+        tags: { consumer: 'SendWebhookDataConsumer', uploadId, method: 'processChunkedMode' },
+        extra: { currentPage, totalPages, chunkSize: cachedData.chunkSize },
       });
-    } else {
-      // Processing is done
-      this.finalizeUpload(uploadId);
+      throw error; // Re-throw to be handled by message() catch block
     }
   }
 
@@ -434,5 +456,51 @@ export class SendWebhookDataConsumer extends BaseConsumer {
 
   private async finalizeUpload(uploadId: string) {
     return await this.uploadRepository.update({ _id: uploadId }, { status: UploadStatusEnum.COMPLETED });
+  }
+
+  private async handleInfrastructureError(uploadId: string, error: Error) {
+    try {
+      // Mark upload as terminated so user knows it didn't complete
+      await this.uploadRepository.update({ _id: uploadId }, { status: UploadStatusEnum.TERMINATED });
+
+      // Notify team members about the infrastructure failure
+      const uploadata = await this.uploadRepository.getUploadProcessInformation(uploadId);
+      if (!uploadata) return;
+
+      const templateData = await this.templateRepository.findById(uploadata._templateId, 'name _projectId');
+      if (!templateData) return;
+
+      const environment = await this.environmentRepository.getProjectTeamMembers(templateData._projectId);
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore
+      const teamMemberEmails = environment.map((teamMember) => teamMember._userId.email);
+
+      const emailContents = this.emailService.getEmailContent({
+        type: 'ERROR_SENDING_WEBHOOK_DATA',
+        data: {
+          error: `Infrastructure error during webhook delivery: ${error.message}`,
+          importName: templateData.name,
+          time: new Date().toString(),
+          webhookUrl: 'N/A (Infrastructure failure)',
+          importId: uploadId,
+        },
+      });
+
+      for (const email of teamMemberEmails) {
+        await this.emailService.sendEmail({
+          to: email,
+          subject: `${EMAIL_SUBJECT.ERROR_SENDING_WEBHOOK_DATA} ${templateData.name}`,
+          html: emailContents,
+          from: process.env.ALERT_EMAIL_FROM,
+          senderName: process.env.EMAIL_FROM_NAME,
+        });
+      }
+    } catch (notifyError) {
+      // Don't let notification failures mask the original error
+      Sentry.captureException(notifyError, {
+        tags: { consumer: 'SendWebhookDataConsumer', uploadId, method: 'handleInfrastructureError' },
+      });
+      console.error('Failed to handle infrastructure error:', notifyError);
+    }
   }
 }
