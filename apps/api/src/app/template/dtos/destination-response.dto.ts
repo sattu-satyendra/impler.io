@@ -10,6 +10,7 @@ export class DestinationResponseDto {
     retryInterval?: number;
     retryCount?: number;
     singleRecordMode?: boolean;
+    flatArrayMode?: boolean;
   };
   bubbleio?: {
     bubbleAppUrl: string;

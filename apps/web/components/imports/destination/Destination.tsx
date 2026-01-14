@@ -110,6 +110,21 @@ export function Destination({ template }: DestinationProps) {
             {!singleRecordMode && (
               <Controller
                 control={control}
+                name="webhook.flatArrayMode"
+                render={({ field }) => (
+                  <Switch
+                    label="Flat Array Mode"
+                    description="Send records as a flat array without metadata wrapper"
+                    checked={field.value || false}
+                    onChange={(event) => field.onChange(event.currentTarget.checked)}
+                  />
+                )}
+              />
+            )}
+
+            {!singleRecordMode && (
+              <Controller
+                control={control}
                 name="webhook.chunkSize"
                 render={({ field }) => (
                   <NumberInput

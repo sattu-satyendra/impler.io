@@ -27,7 +27,15 @@ COPY packages/react ./packages/react
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NX_SKIP_NX_CACHE=true
 
+# Build arguments for Next.js public env vars (baked at build time)
+ARG NEXT_PUBLIC_API_BASE_URL
+ARG NEXT_PUBLIC_EMBED_URL
+
+# Set them as environment variables for the build
+ENV NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL}
+ENV NEXT_PUBLIC_EMBED_URL=${NEXT_PUBLIC_EMBED_URL}
+
 RUN pnpm i
-# RUN pnpm build
+RUN pnpm build:web
 
 CMD ["pnpm", "start:static:web"]

@@ -76,6 +76,7 @@ export type CommonCachedData = {
   imageHeadings?: string[];
   isInvalidRecords?: boolean;
   singleRecordMode?: boolean;
+  flatArrayMode?: boolean;
 };
 
 export type SendWebhookCachedData = {

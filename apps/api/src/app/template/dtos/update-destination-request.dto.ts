@@ -40,6 +40,10 @@ class WebhookDestinationObject {
   @IsOptional()
   @IsBoolean()
   singleRecordMode?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  flatArrayMode?: boolean;
 }
 
 class BubbleIoDestinationObject {

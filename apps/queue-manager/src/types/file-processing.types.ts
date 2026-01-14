@@ -16,6 +16,7 @@ export interface IBuildSendDataParameters extends IBaseSendDataParameters {
   chunkFormat?: string;
   multiSelectHeadings?: Record<string, string>;
   imageHeadings?: string[];
+  flatArrayMode?: boolean;
 }
 export interface ISendDataResponse {
   statusCode: number;

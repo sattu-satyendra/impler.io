@@ -14,4 +14,6 @@ export class WebhookDestinationEntity {
   retryCount: number;
 
   singleRecordMode?: boolean;
+
+  flatArrayMode?: boolean;
 }

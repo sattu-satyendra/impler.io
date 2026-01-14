@@ -30,6 +30,10 @@ const webhookDestinationSchema = new Schema(
       type: Schema.Types.Boolean,
       default: false,
     },
+    flatArrayMode: {
+      type: Schema.Types.Boolean,
+      default: false,
+    },
   },
   { ...schemaOptions }
 );

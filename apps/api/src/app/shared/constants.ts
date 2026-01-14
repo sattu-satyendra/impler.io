@@ -76,11 +76,13 @@ export const CONSTANTS = {
   BUBBLEIO_PROPS: {},
 };
 
+const isSecureCookie = process.env.SECURE_COOKIE !== 'false';
+
 export const COOKIE_CONFIG: CookieOptions = {
   httpOnly: true,
-  secure: true,
+  secure: isSecureCookie,
   maxAge: CONSTANTS.maxAge,
-  sameSite: 'none',
+  sameSite: isSecureCookie ? 'none' : 'lax',
 };
 
 export const VARIABLES = {

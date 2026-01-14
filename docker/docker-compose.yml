@@ -38,6 +38,7 @@ services:
       AZURE_STORAGE_CONTAINER: ${AZURE_STORAGE_CONTAINER}
       JWT_SECRET: ${JWT_SECRET}
       COOKIE_DOMAIN: ${COOKIE_DOMAIN}
+      SECURE_COOKIE: ${SECURE_COOKIE}
       RABBITMQ_CONN_URL: ${RABBITMQ_CONN_URL}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
@@ -68,7 +69,7 @@ services:
       NODE_ENV: ${NODE_ENV}
       MONGO_URL: ${MONGO_URL}
       RABBITMQ_CONN_URL: ${RABBITMQ_CONN_URL}
-      API_ROOT_URL: http://api:3000
+      API_ROOT_URL: ${API_ROOT_URL}
       S3_REGION: ${S3_REGION}
       S3_LOCAL_STACK: ${S3_LOCAL_STACK}
       S3_BUCKET_NAME: ${S3_BUCKET_NAME}
@@ -124,6 +125,9 @@ services:
     build:
       context: ..
       dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${API_ROOT_URL}
+        NEXT_PUBLIC_EMBED_URL: ${WIDGET_EMBED_PATH}
     container_name: web
     environment:
       NEXT_PUBLIC_API_BASE_URL: ${API_ROOT_URL}

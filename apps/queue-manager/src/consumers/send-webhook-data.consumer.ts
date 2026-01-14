@@ -198,6 +198,7 @@ export class SendWebhookDataConsumer extends BaseConsumer {
         totalRecords: allDataJson.length,
         imageHeadings: cachedData.imageHeadings,
         multiSelectHeadings: cachedData.multiSelectHeadings,
+        flatArrayMode: cachedData.flatArrayMode,
       });
 
       const allData = {
@@ -275,7 +276,8 @@ export class SendWebhookDataConsumer extends BaseConsumer {
     extra = '',
     imageHeadings,
     multiSelectHeadings,
-  }: IBuildSendDataParameters): { sendData: Record<string, unknown>; page: number } {
+    flatArrayMode,
+  }: IBuildSendDataParameters): { sendData: Record<string, unknown> | Record<string, unknown>[]; page: number } {
     const defaultValuesObj = JSON.parse(defaultValues);
     const slicedData = data.slice(
       Math.max((page - DEFAULT_PAGE) * chunkSize, MIN_LIMIT),
@@ -291,6 +293,14 @@ export class SendWebhookDataConsumer extends BaseConsumer {
     const transformedData = recordFormat
       ? slicedData.map((obj) => replaceVariablesInObject(JSON.parse(recordFormat), obj.record, defaultValuesObj))
       : slicedData.map((obj) => obj.record);
+
+    // Flat array mode: send just the array of records without metadata wrapper
+    if (flatArrayMode) {
+      return {
+        sendData: transformedData,
+        page,
+      };
+    }
 
     const sendData = {
       page,
@@ -357,6 +367,7 @@ export class SendWebhookDataConsumer extends BaseConsumer {
       imageHeadings,
       email: userEmail,
       singleRecordMode: webhookDestination?.singleRecordMode,
+      flatArrayMode: webhookDestination?.flatArrayMode,
     };
   }
 
