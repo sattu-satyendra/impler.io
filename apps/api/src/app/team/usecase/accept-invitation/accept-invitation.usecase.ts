@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { AuthService } from 'app/auth/services/auth.service';
-import { EmailService, PaymentAPIService } from '@impler/services';
+import { EmailService } from '@impler/services';
 import { EMAIL_SUBJECT, IJwtPayload, SCREENS, UserRolesEnum } from '@impler/shared';
 import {
   ProjectEntity,
@@ -20,7 +20,6 @@ export class AcceptInvitation {
     private authService: AuthService,
     private emailService: EmailService,
     private projectRepository: ProjectRepository,
-    private paymentAPIService: PaymentAPIService,
     private environmentRepository: EnvironmentRepository,
     private projectInvitationRepository: ProjectInvitationRepository
   ) {}
@@ -98,12 +97,6 @@ export class AcceptInvitation {
   }
   async registerUser(user: IJwtPayload) {
     try {
-      const userData = {
-        name: user.firstName + ' ' + user.lastName,
-        email: user.email,
-        externalId: user.email,
-      };
-      await this.paymentAPIService.createUser(userData);
       await this.leadService.createLead({
         'First Name': user.firstName,
         'Last Name': user.lastName,

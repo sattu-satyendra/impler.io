@@ -6,7 +6,6 @@ import { Global, MiddlewareConsumer, Module, NestModule, Provider, RequestMethod
 import { USE_CASES } from './usecases';
 import { CONSTANTS } from '@shared/constants';
 import { AuthController } from './auth.controller';
-import { PaymentAPIService } from '@impler/services';
 import { AuthService } from './services/auth.service';
 import { SharedModule } from '../shared/shared.module';
 import { LeadService } from '@shared/services/lead.service';
@@ -34,7 +33,7 @@ if (process.env.GITHUB_OAUTH_CLIENT_ID) {
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, LeadService, ...AUTH_STRATEGIES, ...USE_CASES, PaymentAPIService],
+  providers: [AuthService, LeadService, ...AUTH_STRATEGIES, ...USE_CASES],
   exports: [AuthService],
 })
 export class AuthModule implements NestModule {

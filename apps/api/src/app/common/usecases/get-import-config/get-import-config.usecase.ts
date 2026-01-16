@@ -1,34 +1,19 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { UserRepository, TemplateRepository, TemplateEntity } from '@impler/dal';
+import { TemplateRepository, TemplateEntity } from '@impler/dal';
 import { BILLABLEMETRIC_CODE_ENUM, IImportConfig } from '@impler/shared';
-import { PaymentAPIService } from '@impler/services';
 import { APIMessages } from '@shared/constants';
 
 @Injectable()
 export class GetImportConfig {
-  constructor(
-    private userRepository: UserRepository,
-    private paymentAPIService: PaymentAPIService,
-    private templateRepository: TemplateRepository
-  ) {}
+  constructor(private templateRepository: TemplateRepository) {}
 
   async execute(projectId: string, templateId?: string): Promise<IImportConfig> {
-    const userEmail = await this.userRepository.findUserEmailFromProjectId(projectId);
+    // All features are enabled - no subscription checks needed
     const isFeatureAvailableMap = new Map<string, boolean>();
 
     Object.values(BILLABLEMETRIC_CODE_ENUM).forEach((code) => {
-      isFeatureAvailableMap.set(code, false);
+      isFeatureAvailableMap.set(code, true);
     });
-
-    for (const billableMetricCode of Object.values(BILLABLEMETRIC_CODE_ENUM)) {
-      try {
-        const isAvailable = await this.paymentAPIService.checkEvent({
-          email: userEmail,
-          billableMetricCode: BILLABLEMETRIC_CODE_ENUM[billableMetricCode],
-        });
-        isFeatureAvailableMap.set(billableMetricCode, isAvailable);
-      } catch (error) {}
-    }
 
     let template: TemplateEntity;
     if (templateId) {
@@ -44,7 +29,7 @@ export class GetImportConfig {
 
     return {
       ...Object.fromEntries(isFeatureAvailableMap),
-      showBranding: !isFeatureAvailableMap.get(BILLABLEMETRIC_CODE_ENUM.REMOVE_BRANDING),
+      showBranding: false,
       mode: template?.mode,
       title: template?.name,
     };

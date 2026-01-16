@@ -1,17 +1,11 @@
 import Head from 'next/head';
-import getConfig from 'next/config';
 import { Stack, Title } from '@mantine/core';
 
 import { TEXTS } from '@config';
 import { AppLayout } from '@layouts/AppLayout';
 import { PlanDetails } from '@components/home/PlanDetails';
-import { PlanPricingTable } from '@components/UpgradePlan/Plans/PlansPricingTable';
-import { useAppState } from 'store/app.context';
-const { publicRuntimeConfig } = getConfig();
 
 export default function Home() {
-  const { profileInfo } = useAppState();
-
   return (
     <>
       <Head>
@@ -25,9 +19,7 @@ export default function Home() {
       </Head>
       <Stack>
         <Title order={2}>Home</Title>
-        {publicRuntimeConfig.NEXT_PUBLIC_PAYMENT_GATEWAY_URL && <PlanDetails />}
-        <PlanPricingTable userProfile={profileInfo!} />
-        {/* <PlanTableDetails /> */}
+        <PlanDetails />
       </Stack>
     </>
   );

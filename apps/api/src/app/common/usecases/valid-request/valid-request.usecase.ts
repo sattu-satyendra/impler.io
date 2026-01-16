@@ -4,19 +4,16 @@ import { Injectable, HttpStatus, HttpException, UnauthorizedException } from '@n
 
 import { APIMessages } from '@shared/constants';
 import { SchemaDto } from 'app/common/dtos/Schema.dto';
-import { PaymentAPIService } from '@impler/services';
 import { ValidRequestCommand } from './valid-request.command';
-import { ProjectRepository, TemplateRepository, UserEntity } from '@impler/dal';
+import { ProjectRepository, TemplateRepository } from '@impler/dal';
 import { UniqueColumnException } from '@shared/exceptions/unique-column.exception';
-import { BILLABLEMETRIC_CODE_ENUM, ColumnTypesEnum } from '@impler/shared';
 import { DocumentNotFoundException } from '@shared/exceptions/document-not-found.exception';
 
 @Injectable()
 export class ValidRequest {
   constructor(
     private projectRepository: ProjectRepository,
-    private templateRepository: TemplateRepository,
-    private paymentAPIService: PaymentAPIService
+    private templateRepository: TemplateRepository
   ) {}
 
   async execute(command: ValidRequestCommand): Promise<{ success: boolean }> {
@@ -83,40 +80,6 @@ export class ValidRequest {
             );
 
             throw new DocumentNotFoundException('Schema', command.schema, errors.toString());
-          }
-        }
-
-        const hasImageColumns = parsedSchema.some((column) => column.type === ColumnTypesEnum.IMAGE);
-        const hasValidations = parsedSchema.some(
-          (column) => Array.isArray(column.validations) && column.validations.length > 0
-        );
-        let email: string;
-        if (hasImageColumns || hasValidations) {
-          const project = await this.projectRepository.getUserOfProject(command.projectId);
-          email = (project._userId as unknown as UserEntity).email;
-        }
-        if (hasImageColumns && email) {
-          const imageImportAvailable = await this.paymentAPIService.checkEvent({
-            email,
-            billableMetricCode: BILLABLEMETRIC_CODE_ENUM.IMAGE_IMPORT,
-          });
-
-          if (!imageImportAvailable) {
-            throw new DocumentNotFoundException('Schema', command.schema, APIMessages.FEATURE_UNAVAILABLE.IMAGE_IMPORT);
-          }
-        }
-        if (hasValidations && email) {
-          const validationsAvailable = await this.paymentAPIService.checkEvent({
-            email,
-            billableMetricCode: BILLABLEMETRIC_CODE_ENUM.ADVANCED_VALIDATORS,
-          });
-
-          if (!validationsAvailable) {
-            throw new DocumentNotFoundException(
-              'Schema',
-              command.schema,
-              APIMessages.FEATURE_UNAVAILABLE.ADVANCED_VALIDATIONS
-            );
           }
         }
       }

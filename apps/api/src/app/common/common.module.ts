@@ -3,11 +3,10 @@ import { USE_CASES } from './usecases';
 import { UploadRepository } from '@impler/dal';
 import { CommonController } from './common.controller';
 import { SharedModule } from '@shared/shared.module';
-import { PaymentAPIService } from '@impler/services';
 
 @Module({
   imports: [SharedModule, UploadRepository],
-  providers: [...USE_CASES, PaymentAPIService],
+  providers: [...USE_CASES],
   controllers: [CommonController],
 })
 export class CommonModule {}
