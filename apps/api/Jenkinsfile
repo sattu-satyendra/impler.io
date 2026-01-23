@@ -1,0 +1,43 @@
+pipeline {
+    agent {
+        kubernetes {
+            inheritFrom 'kaniko-ecr'
+        }
+    }
+
+    environment {
+        ECR_REGISTRY = '578061096415.dkr.ecr.us-east-1.amazonaws.com'
+        IMAGE_NAME = 'impler-api'
+        DOCKERFILE_PATH = 'apps/api/Dockerfile'
+    }
+
+    stages {
+        stage('Build and Push Docker Image') {
+            steps {
+                container('kaniko') {
+                    script {
+                        sh """
+                            /kaniko/executor \
+                                --context=\${WORKSPACE} \
+                                --dockerfile=\${WORKSPACE}/${DOCKERFILE_PATH} \
+                                --destination=${ECR_REGISTRY}/${IMAGE_NAME}:${params.release_tag} \
+                                --destination=${ECR_REGISTRY}/${IMAGE_NAME}:latest \
+                                --cache=true \
+                                --cache-repo=${ECR_REGISTRY}/${IMAGE_NAME}-cache \
+                                --custom-platform=linux/arm64
+                        """
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Successfully built and pushed ${IMAGE_NAME}:${params.release_tag}"
+        }
+        failure {
+            echo "Failed to build ${IMAGE_NAME}"
+        }
+    }
+}

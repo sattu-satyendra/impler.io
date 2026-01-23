@@ -1,0 +1,48 @@
+pipeline {
+    agent {
+        kubernetes {
+            inheritFrom 'kaniko-ecr'
+        }
+    }
+
+    environment {
+        ECR_REGISTRY = '578061096415.dkr.ecr.us-east-1.amazonaws.com'
+        IMAGE_NAME = 'impler-web'
+        DOCKERFILE_PATH = 'apps/web/Dockerfile'
+        // Build args for Next.js public env vars
+        NEXT_PUBLIC_API_BASE_URL = 'https://qa-impler-api.mykaarma.com'
+        NEXT_PUBLIC_EMBED_URL = 'https://qa-impler-embed.mykaarma.com/embed.umd.min.js'
+    }
+
+    stages {
+        stage('Build and Push Docker Image') {
+            steps {
+                container('kaniko') {
+                    script {
+                        sh """
+                            /kaniko/executor \
+                                --context=\${WORKSPACE} \
+                                --dockerfile=\${WORKSPACE}/${DOCKERFILE_PATH} \
+                                --destination=${ECR_REGISTRY}/${IMAGE_NAME}:${params.release_tag} \
+                                --destination=${ECR_REGISTRY}/${IMAGE_NAME}:latest \
+                                --build-arg NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL} \
+                                --build-arg NEXT_PUBLIC_EMBED_URL=${NEXT_PUBLIC_EMBED_URL} \
+                                --cache=true \
+                                --cache-repo=${ECR_REGISTRY}/${IMAGE_NAME}-cache \
+                                --custom-platform=linux/arm64
+                        """
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Successfully built and pushed ${IMAGE_NAME}:${params.release_tag}"
+        }
+        failure {
+            echo "Failed to build ${IMAGE_NAME}"
+        }
+    }
+}
