@@ -4,7 +4,6 @@ import { colors, NOTIFICATION_KEYS } from '@config';
 import { useAppState } from 'store/app.context';
 import { useActiveSubscriptionDetails } from '@hooks/useActiveSubscriptionDetails';
 
-import { InactiveMembership } from './InactiveMembership';
 import { ActiveSubscriptionDetails } from './ActiveSubscriptionDetails';
 import { InformationIcon } from '@assets/icons/Information.icon';
 
@@ -35,6 +34,10 @@ export function PlanDetails() {
     return <Skeleton width="100%" height="200" />;
   }
 
+  if (!activePlanDetails) {
+    return null;
+  }
+
   return (
     <>
       <Alert
@@ -62,15 +65,11 @@ export function PlanDetails() {
           borderRadius: theme.radius.xs,
         }}
       >
-        {activePlanDetails ? (
-          <ActiveSubscriptionDetails
-            activePlanDetails={activePlanDetails}
-            numberOfAllocatedRowsInCurrentPlan={numberOfAllocatedRowsInCurrentPlan}
-            showWarning={(activePlanDetails.usage?.ROWS ?? 0) >= numberOfAllocatedRowsInCurrentPlan}
-          />
-        ) : (
-          <InactiveMembership />
-        )}
+        <ActiveSubscriptionDetails
+          activePlanDetails={activePlanDetails}
+          numberOfAllocatedRowsInCurrentPlan={numberOfAllocatedRowsInCurrentPlan}
+          showWarning={(activePlanDetails.usage?.ROWS ?? 0) >= numberOfAllocatedRowsInCurrentPlan}
+        />
       </Stack>
     </>
   );

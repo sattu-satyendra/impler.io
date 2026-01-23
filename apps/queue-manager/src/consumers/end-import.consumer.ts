@@ -2,7 +2,7 @@ import * as Sentry from '@sentry/node';
 import { Readable } from 'stream';
 import { DalService, FileRepository, UploadRepository } from '@impler/dal';
 import { QueuesEnum, EndImportData, FileMimeTypesEnum, DestinationsEnum } from '@impler/shared';
-import { FileNameService, PaymentAPIService, StorageService } from '@impler/services';
+import { FileNameService, StorageService } from '@impler/services';
 
 import { BaseConsumer } from './base.consumer';
 import { publishToQueue } from '../bootstrap';
@@ -14,7 +14,6 @@ export class EndImportConsumer extends BaseConsumer {
   private fileRepository: FileRepository = new FileRepository();
   private fileNameService: FileNameService = new FileNameService();
   private storageService: StorageService = getStorageServiceClass();
-  private paymentAPIService: PaymentAPIService = new PaymentAPIService();
   private uploadRepository: UploadRepository = new UploadRepository();
 
   async message(message: { content: string }) {
@@ -22,22 +21,16 @@ export class EndImportConsumer extends BaseConsumer {
 
     try {
       await this.convertRecordsToJsonFile(data.uploadId, data.uploadedFileId);
-      const userEmail = await this.uploadRepository.getUserEmailFromUploadId(data.uploadId);
 
-      const dataProcessingAllowed = await this.paymentAPIService.checkEvent({
-        email: userEmail,
-      });
-
-      if (dataProcessingAllowed) {
-        if (data.destination === DestinationsEnum.WEBHOOK) {
-          publishToQueue(QueuesEnum.SEND_WEBHOOK_DATA, {
-            uploadId: data.uploadId,
-          });
-        } else if (data.destination === DestinationsEnum.BUBBLEIO) {
-          publishToQueue(QueuesEnum.SEND_BUBBLE_DATA, {
-            uploadId: data.uploadId,
-          });
-        }
+      // All features enabled - no subscription check needed
+      if (data.destination === DestinationsEnum.WEBHOOK) {
+        publishToQueue(QueuesEnum.SEND_WEBHOOK_DATA, {
+          uploadId: data.uploadId,
+        });
+      } else if (data.destination === DestinationsEnum.BUBBLEIO) {
+        publishToQueue(QueuesEnum.SEND_BUBBLE_DATA, {
+          uploadId: data.uploadId,
+        });
       }
     } catch (error) {
       Sentry.captureException(error);

@@ -1,29 +1,25 @@
 import { Injectable } from '@nestjs/common';
 
 import { APIMessages } from '@shared/constants';
-import { PaymentAPIService } from '@impler/services';
 import { UpdateImageColumns, SaveSampleFile } from '@shared/usecases';
-import { BILLABLEMETRIC_CODE_ENUM, ColumnTypesEnum } from '@impler/shared';
 import { ColumnEntity, ColumnRepository, CustomizationRepository, TemplateRepository } from '@impler/dal';
 import { AddColumnCommand } from 'app/column/commands/add-column.command';
 import { UniqueColumnException } from '@shared/exceptions/unique-column.exception';
 import { UpdateCustomization } from '../update-customization/update-customization.usecase';
-import { DocumentNotFoundException } from '@shared/exceptions/document-not-found.exception';
 
 @Injectable()
 export class UpdateTemplateColumns {
   constructor(
     private saveSampleFile: SaveSampleFile,
     private columnRepository: ColumnRepository,
-    private paymentAPIService: PaymentAPIService,
     private templateRepository: TemplateRepository,
     private updateImageTemplates: UpdateImageColumns,
     private updateCustomization: UpdateCustomization,
     private customizationRepository: CustomizationRepository
   ) {}
 
-  async execute(userColumns: AddColumnCommand[], _templateId: string, email: string) {
-    await this.checkSchema(userColumns, email);
+  async execute(userColumns: AddColumnCommand[], _templateId: string) {
+    this.checkSchema(userColumns);
 
     // eslint-disable-next-line prefer-const
     let userInitialColumns: ColumnEntity[] = await this.columnRepository.find({ _templateId });
@@ -62,44 +58,11 @@ export class UpdateTemplateColumns {
     return data.map((column) => column.key);
   }
 
-  async checkSchema(userColumns: AddColumnCommand[], email: string) {
+  checkSchema(userColumns: AddColumnCommand[]) {
     const columnKeysSet = new Set(userColumns.map((column) => column.key));
     if (columnKeysSet.size !== userColumns.length) {
       throw new UniqueColumnException(APIMessages.COLUMN_KEY_TAKEN);
     }
-
-    const hasImageColumns = userColumns.some((column) => column.type === ColumnTypesEnum.IMAGE);
-    const hasValidations = userColumns.some(
-      (column) => Array.isArray(column.validations) && column.validations.length > 0
-    );
-
-    if (hasImageColumns && email) {
-      const imageImportAvailable = await this.paymentAPIService.checkEvent({
-        email,
-        billableMetricCode: BILLABLEMETRIC_CODE_ENUM.IMAGE_IMPORT,
-      });
-
-      if (!imageImportAvailable) {
-        throw new DocumentNotFoundException(
-          'Schema',
-          BILLABLEMETRIC_CODE_ENUM.IMAGE_IMPORT,
-          APIMessages.FEATURE_UNAVAILABLE.IMAGE_IMPORT
-        );
-      }
-    }
-    if (hasValidations && email) {
-      const validationsAvailable = await this.paymentAPIService.checkEvent({
-        email,
-        billableMetricCode: BILLABLEMETRIC_CODE_ENUM.ADVANCED_VALIDATORS,
-      });
-
-      if (!validationsAvailable) {
-        throw new DocumentNotFoundException(
-          'Schema',
-          BILLABLEMETRIC_CODE_ENUM.ADVANCED_VALIDATORS,
-          APIMessages.FEATURE_UNAVAILABLE.ADVANCED_VALIDATIONS
-        );
-      }
-    }
+    // All features are enabled - no subscription checks needed
   }
 }

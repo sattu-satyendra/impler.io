@@ -3,20 +3,13 @@ import { Injectable } from '@nestjs/common';
 import { DATE_FORMATS } from '@shared/constants';
 import { ISubscriptionData } from '@impler/shared';
 import { PaymentAPIService } from '@impler/services';
-import { EnvironmentRepository } from '@impler/dal';
 
 @Injectable()
 export class GetActiveSubscription {
-  constructor(
-    private paymentApiService: PaymentAPIService,
-    private environmentRepository: EnvironmentRepository
-  ) {}
+  constructor(private paymentApiService: PaymentAPIService) {}
 
-  async execute(projectId: string): Promise<ISubscriptionData> {
-    const teamOwner = await this.environmentRepository.getTeamOwnerDetails(projectId);
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    //@ts-ignore
-    const activeSubscription = await this.paymentApiService.fetchActiveSubscription(teamOwner._userId.email);
+  async execute(): Promise<ISubscriptionData> {
+    const activeSubscription = this.paymentApiService.fetchActiveSubscription();
     if (!activeSubscription) {
       return null;
     }

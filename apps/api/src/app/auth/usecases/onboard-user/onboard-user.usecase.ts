@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { UserRepository } from '@impler/dal';
-import { PaymentAPIService } from '@impler/services';
 import { LEAD_SIGNUP_USING } from '@shared/constants';
 import { OnboardUserCommand } from './onboard-user.command';
 import { LeadService } from '@shared/services/lead.service';
@@ -12,8 +11,7 @@ export class OnboardUser {
   constructor(
     private leadService: LeadService,
     private createProject: CreateProject,
-    private userRepository: UserRepository,
-    private paymentAPIService: PaymentAPIService
+    private userRepository: UserRepository
   ) {}
 
   async execute(command: OnboardUserCommand) {
@@ -37,12 +35,6 @@ export class OnboardUser {
     const updatedUser = await this.userRepository.findOne({ _id: command._userId });
     if (updatedUser) {
       try {
-        const userData = {
-          name: updatedUser.firstName + ' ' + updatedUser.lastName,
-          email: updatedUser.email,
-          externalId: updatedUser.email,
-        };
-        await this.paymentAPIService.createUser(userData);
         await this.leadService.createLead({
           'First Name': updatedUser.firstName,
           'Last Name': updatedUser.lastName,

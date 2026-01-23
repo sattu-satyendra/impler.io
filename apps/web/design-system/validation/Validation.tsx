@@ -1,17 +1,11 @@
-import Link from 'next/link';
 import { ReactNode } from 'react';
-import { modals } from '@mantine/modals';
 import { Control, FieldErrors } from 'react-hook-form';
 import { Flex, MantineSize, Stack } from '@mantine/core';
 
 import { Checkbox } from '@ui/checkbox';
 import { AutoHeightComponent } from '@ui/auto-height-component';
 
-import { ROUTES } from '@config';
-import { Badge } from '@ui/badge';
-import { Button } from '@ui/button';
 import { IColumn } from '@impler/shared';
-import { LockIcon } from '@assets/icons/Lock.icon';
 import { ValidationTypesEnum } from '@impler/client';
 import { TooltipLabel } from '@components/guide-point';
 
@@ -47,7 +41,6 @@ export function Validation({
   min,
   max,
   type,
-  unavailable,
   size = 'sm',
   description,
   onCheckToggle,
@@ -55,23 +48,18 @@ export function Validation({
   maxPlaceholder,
   errorMessagePlaceholder,
 }: ValidationProps) {
-  const { classes } = useStyles({ showWrapper: unavailable });
+  const { classes } = useStyles({ showWrapper: false });
 
   return (
     <Flex direction="row" gap="sm" className={classes.wrapper} align="center">
-      {unavailable ? (
-        <LockIcon className={classes.icon} size="xl" />
-      ) : (
-        <Checkbox checked={index > -1} onChange={(status) => onCheckToggle(status, index)} />
-      )}
+      <Checkbox checked={index > -1} onChange={(status) => onCheckToggle(status, index)} />
 
       <Stack spacing={5} w="100%" align="flex-start">
-        {unavailable ? <Badge color="orange">Feature unavailable on current plan</Badge> : null}
         <div>
           <TooltipLabel link={link} label={label} />
           {description ? <p className={classes.description}>{description}</p> : null}
         </div>
-        <AutoHeightComponent isVisible={index > -1 && type === ValidationTypesEnum.DIGITS && !unavailable}>
+        <AutoHeightComponent isVisible={index > -1 && type === ValidationTypesEnum.DIGITS}>
           {type === ValidationTypesEnum.DIGITS ? (
             <DigitsValidation
               minDigits={min}
@@ -109,7 +97,7 @@ export function Validation({
             />
           )}
         </AutoHeightComponent>
-        <AutoHeightComponent isVisible={index > -1 && type === ValidationTypesEnum.UNIQUE_WITH && !unavailable}>
+        <AutoHeightComponent isVisible={index > -1 && type === ValidationTypesEnum.UNIQUE_WITH}>
           <UniqueWithValidation
             key={index}
             size={size}
@@ -120,9 +108,7 @@ export function Validation({
           />
         </AutoHeightComponent>
         <AutoHeightComponent
-          isVisible={
-            index > -1 && (type === ValidationTypesEnum.LENGTH || type === ValidationTypesEnum.RANGE) && !unavailable
-          }
+          isVisible={index > -1 && (type === ValidationTypesEnum.LENGTH || type === ValidationTypesEnum.RANGE)}
         >
           <MinMaxValidation
             max={max}
@@ -138,12 +124,6 @@ export function Validation({
           />
         </AutoHeightComponent>
       </Stack>
-
-      {unavailable ? (
-        <Button component={Link} size="xs" href={ROUTES.EXPLORE_PLANS} onClick={modals.closeAll}>
-          Explore Options
-        </Button>
-      ) : null}
     </Flex>
   );
 }

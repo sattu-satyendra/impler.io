@@ -41,14 +41,8 @@ export class StartProcess {
     let importedData;
     const destination = (uploadInfo._templateId as unknown as TemplateEntity)?.destination;
     const userEmail = await this.uploadRepository.getUserEmailFromUploadId(_uploadId);
-    const dataProcessingAllowed = await this.paymentAPIService.checkEvent({
-      email: userEmail,
-    });
 
-    if (
-      dataProcessingAllowed &&
-      (uploadInfo._templateId as unknown as TemplateEntity).destination === DestinationsEnum.FRONTEND
-    ) {
+    if ((uploadInfo._templateId as unknown as TemplateEntity).destination === DestinationsEnum.FRONTEND) {
       importedData = await this.getImportedData({
         uploadId: _uploadId,
         customSchema: uploadInfo.customSchema,

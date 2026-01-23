@@ -6,6 +6,8 @@ import { JwtAuthGuard } from '@shared/framework/auth.gaurd';
 import { IJwtPayload, ACCESS_KEY_NAME } from '@impler/shared';
 import { UserSession } from '@shared/framework/user.decorator';
 
+// IJwtPayload kept for getImportCountRoute
+
 @ApiTags('User')
 @Controller('/user')
 @UseGuards(JwtAuthGuard)
@@ -37,7 +39,7 @@ export class UserController {
   @ApiOperation({
     summary: 'Get Active Subscription Information',
   })
-  async getActiveSubscriptionRoute(@UserSession() user: IJwtPayload) {
-    return this.getActiveSubscription.execute(user._projectId);
+  async getActiveSubscriptionRoute() {
+    return this.getActiveSubscription.execute();
   }
 }
