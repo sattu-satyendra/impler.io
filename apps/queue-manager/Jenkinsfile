@@ -1,37 +1,78 @@
+def ecr_token
+def BUILD_ENVIRONMENT
+def ECR_CREDENTIALS
 pipeline {
-    agent {
-        kubernetes {
-            inheritFrom 'kaniko-ecr'
-        }
-    }
-
+    agent any
     environment {
-        ECR_REGISTRY = '578061096415.dkr.ecr.us-east-1.amazonaws.com'
+        BUILDER_NAME = 'k8s-builder'
+        DOCKER_REGISTRY = '578061096415.dkr.ecr.us-east-1.amazonaws.com'
         IMAGE_NAME = 'impler-queue-manager'
+        PLATFORMS = 'linux/amd64,linux/arm64'
+        GIT_REPO_URL = 'https://github.com/mykaarma/impler.io.git'
+        GIT_REPO_PATH = '.'
         DOCKERFILE_PATH = 'apps/queue-manager/Dockerfile'
     }
-
+    parameters {
+        string(name: 'release_tag', defaultValue: '', description: 'The release Tag to execute the build')
+    }
     stages {
-        stage('Build and Push Docker Image') {
+        stage("Source Code Management") {
             steps {
-                container('kaniko') {
+                script {
+                    checkout([
+                        $class: 'GitSCM',
+                        branches: [[name: "refs/tags/${params.release_tag}"]],
+                        userRemoteConfigs: [[
+                            url: "${GIT_REPO_URL}",
+                            credentialsId: 'git_credentials'
+                        ]]
+                    ])
+                }
+            }
+        }
+        stage('Docker Login') {
+            steps {
+                container('aws-cli') {
                     script {
-                        sh """
-                            /kaniko/executor \
-                                --context=\${WORKSPACE} \
-                                --dockerfile=\${WORKSPACE}/${DOCKERFILE_PATH} \
-                                --destination=${ECR_REGISTRY}/${IMAGE_NAME}:${params.release_tag} \
-                                --destination=${ECR_REGISTRY}/${IMAGE_NAME}:latest \
-                                --cache=true \
-                                --cache-repo=${ECR_REGISTRY}/${IMAGE_NAME}-cache \
-                                --custom-platform=linux/arm64
-                        """
+                        def url = env.EXTERNAL_JENKINS_URL
+                        if (url.contains("qa-")) {
+                            BUILD_ENVIRONMENT = 'qa-aws'
+                            ECR_CREDENTIALS = 'qa-ecr'
+                        } else {
+                            BUILD_ENVIRONMENT = 'prod'
+                            ECR_CREDENTIALS = 'ecr'
+                        }
+                        withCredentials([aws(credentialsId: "${ECR_CREDENTIALS}")]){
+                            ecr_token = sh(script: "aws ecr get-login-password --region us-east-1", returnStdout: true).trim()
+                        }
+                    }
+                }
+            }
+        }
+        stage("Build image") {
+            steps {
+                container('docker') {
+                    script {
+                        def builderExists = sh(script: "docker buildx ls | grep ${BUILDER_NAME}", returnStatus: true)
+                        if (builderExists != 0) {
+                            sh "docker buildx create --bootstrap --name ${BUILDER_NAME} --driver kubernetes --platform=linux/amd64 --node=builder-amd64 --driver-opt replicas=1,nodeselector=\"kubernetes.io/arch=amd64\" --use"
+                            sh "docker buildx create --append --bootstrap --name ${BUILDER_NAME} --driver kubernetes --platform=linux/arm64 --node=builder-arm64 --driver-opt replicas=1,nodeselector=\"kubernetes.io/arch=arm64\" --use"
+                        }
+                        dir(env.GIT_REPO_PATH) {
+                            sh "docker login --username AWS --password ${ecr_token} ${DOCKER_REGISTRY}"
+                            def pushOutput = sh script: "docker buildx build -f ${DOCKERFILE_PATH} --builder ${BUILDER_NAME} \
+                                                        --platform ${PLATFORMS} -t ${DOCKER_REGISTRY}/${IMAGE_NAME}:${params.release_tag} \
+                                                        -t ${DOCKER_REGISTRY}/${IMAGE_NAME}:latest --push --provenance false . 2>&1", returnStdout: true
+                            echo "${pushOutput}"
+                            if (pushOutput.contains('ERROR')){
+                                error "Docker build failed with Error in build and Push"
+                            }
+                        }
                     }
                 }
             }
         }
     }
-
     post {
         success {
             echo "Successfully built and pushed ${IMAGE_NAME}:${params.release_tag}"
