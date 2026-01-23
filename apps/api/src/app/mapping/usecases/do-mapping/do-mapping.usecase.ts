@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { UploadRepository } from '@impler/dal';
-import { Defaults, ITemplateSchemaItem, UploadStatusEnum } from '@impler/shared';
+import { Defaults, ITemplateSchemaItem, UploadStatusEnum, findBestMatch, MatchType } from '@impler/shared';
 import { DoMappingCommand } from './do-mapping.command';
 
 @Injectable()
@@ -20,10 +20,39 @@ export class DoMapping {
 
   private buildMapping(columns: ITemplateSchemaItem[], headings: string[]): ITemplateSchemaItem[] {
     const mapHeadings = [...headings];
+
+    /*
+     * First pass: Find high-confidence matches (exact, normalized exact, synonym)
+     * This ensures the best matches are made first before lower-confidence fuzzy matches
+     */
+    const highConfidenceThreshold = 0.9;
+    const lowConfidenceThreshold = 0.6;
+
+    // Track which columns still need mapping
+    const unmappedColumns: ITemplateSchemaItem[] = [];
+
+    // First pass: High confidence matches only
     for (const column of columns) {
-      const headingIndex = this.findBestMatchingHeading(mapHeadings, column.key, column.alternateKeys);
-      if (headingIndex > Defaults.MINUS_ONE) {
-        const [heading] = mapHeadings.splice(headingIndex, Defaults.ONE);
+      const match = findBestMatch(mapHeadings, column.key, column.alternateKeys || [], highConfidenceThreshold);
+
+      if (match.index > Defaults.MINUS_ONE) {
+        const [heading] = mapHeadings.splice(match.index, Defaults.ONE);
+        if (heading) {
+          column.columnHeading = heading;
+        }
+      } else {
+        unmappedColumns.push(column);
+      }
+    }
+
+    // Second pass: Lower confidence fuzzy matches for remaining columns
+    for (const column of unmappedColumns) {
+      if (column.columnHeading) continue; // Already mapped in first pass
+
+      const match = findBestMatch(mapHeadings, column.key, column.alternateKeys || [], lowConfidenceThreshold);
+
+      if (match.index > Defaults.MINUS_ONE && this.isAcceptableFuzzyMatch(match.matchType)) {
+        const [heading] = mapHeadings.splice(match.index, Defaults.ONE);
         if (heading) {
           column.columnHeading = heading;
         }
@@ -33,32 +62,20 @@ export class DoMapping {
     return columns;
   }
 
-  private findBestMatchingHeading(headings: string[], key: string, alternateKeys: string[]): number {
-    const mappedHeadingIndex = headings.findIndex((heading: string) => this.checkStringEqual(heading, key));
-    if (mappedHeadingIndex > Defaults.MINUS_ONE) {
-      // compare key
-      return mappedHeadingIndex;
-    } else if (Array.isArray(alternateKeys) && alternateKeys.length) {
-      // compare alternateKeys
-      const intersectionIndex = headings.findIndex(
-        (heading: string) => !!alternateKeys.find((altKey) => this.checkStringEqual(altKey, heading))
-      );
+  /**
+   * Determine if a fuzzy match type is acceptable for auto-mapping
+   * More conservative with pure Jaro-Winkler matches to avoid false positives
+   */
+  private isAcceptableFuzzyMatch(matchType: MatchType): boolean {
+    const acceptableTypes = [
+      MatchType.EXACT,
+      MatchType.NORMALIZED_EXACT,
+      MatchType.SYNONYM,
+      MatchType.TOKEN_MATCH,
+      MatchType.SUBSTRING,
+      MatchType.JARO_WINKLER,
+    ];
 
-      return intersectionIndex;
-    }
-
-    return Defaults.MINUS_ONE;
-  }
-
-  private checkStringEqual(a: string, b: string): boolean {
-    const str1 = String(a).trim().toLowerCase();
-    const str2 = String(b).trim().toLowerCase();
-
-    const eualityCheck = str1.localeCompare(str2, undefined, { sensitivity: 'accent' }) === Defaults.ZERO;
-    if (eualityCheck) return true;
-
-    const includeCheck = str1.includes(str2) || str2.includes(str1);
-
-    return includeCheck;
+    return acceptableTypes.includes(matchType);
   }
 }

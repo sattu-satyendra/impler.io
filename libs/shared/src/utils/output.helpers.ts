@@ -32,16 +32,20 @@ export function replaceVariableInStringWithKey(str: string, key: string, value: 
 
 export function replaceVariableInString(str: string, record: Record<string, string | number>) {
   const regex = /{{.*?}}/g;
-  let modifiedStr: string | number = str;
+  let modifiedStr: string | number | null | undefined = str;
   const keys = Object.keys(record);
   const matches = str.match(regex);
   for (const match of matches) {
     const key = match.replace(/{{|}}/g, '');
     if (keys.includes(key)) {
       if (str === match) {
+        // Direct replacement - preserve null/undefined values
         modifiedStr = record[key];
       } else if (typeof modifiedStr === 'string') {
-        modifiedStr = replaceVariableInStringWithKey(modifiedStr, key, record[key]);
+        // String interpolation - only if value is not null/undefined
+        if (record[key] !== null && record[key] !== undefined) {
+          modifiedStr = replaceVariableInStringWithKey(modifiedStr, key, record[key]);
+        }
       }
     }
   }
@@ -53,10 +57,15 @@ export function replaceVariable(formatKey: unknown, key: string, value: any, rec
   if (typeof formatKey == 'string' && /{{|}}/g.test(formatKey)) return replaceVariableInString(formatKey, record);
   else if (typeof formatKey === 'object' && !Array.isArray(formatKey) && formatKey !== null) {
     // handling objects
-    return replaceVariablesInObject(formatKey as Record<string, unknown>, record);
+    const replacedObj = replaceVariablesInObject(formatKey as Record<string, unknown>, record);
+
+    // Return the object only if it has remaining keys after omitting missing fields
+    return Object.keys(replacedObj).length > 0 ? replacedObj : undefined;
   } else if (Array.isArray(formatKey)) {
-    // handling arrays
-    return formatKey.map((item: unknown) => replaceVariable(item, key, value, record));
+    // handling arrays - filter out items that should be omitted
+    return formatKey
+      .map((item: unknown) => replaceVariable(item, key, value, record))
+      .filter((item) => !shouldOmitValue(item));
   }
 
   return formatKey;
@@ -70,10 +79,60 @@ export function replaceVariablesInObject(
   record = updateDefaultValues(record, defaultValues);
 
   return Object.keys(format).reduce((acc, key) => {
-    acc[key] = replaceVariable(format[key], key, format[key], record);
+    const replacedValue = replaceVariable(format[key], key, format[key], record);
+
+    // Skip fields that still contain unreplaced {{...}} placeholders (missing data)
+    if (shouldOmitValue(replacedValue)) {
+      return acc;
+    }
+
+    acc[key] = replacedValue;
 
     return acc;
   }, {});
+}
+
+/**
+ * Checks if a value should be omitted from the output.
+ * Returns true if the value contains unreplaced {{...}} placeholders
+ * or if it's an empty object (all nested fields were omitted).
+ *
+ * Note: null values are NOT omitted as they may be intentional defaults (<<null>>)
+ */
+export function shouldOmitValue(value: unknown): boolean {
+  // Omit undefined values (returned when nested objects are empty or field truly missing)
+  if (value === undefined) {
+    return true;
+  }
+
+  // null is a valid value (user may have set <<null>> as default) - do NOT omit
+  if (value === null) {
+    return false;
+  }
+
+  if (typeof value === 'string') {
+    // Check if the string contains unreplaced placeholders
+    return /{{.*?}}/.test(value);
+  }
+
+  if (typeof value === 'object' && !Array.isArray(value)) {
+    // Check if all keys in the object should be omitted (empty object)
+    const keys = Object.keys(value);
+    if (keys.length === 0) {
+      return true;
+    }
+    // Check if all values in the object should be omitted
+    return keys.every((key) => shouldOmitValue((value as Record<string, unknown>)[key]));
+  }
+
+  if (Array.isArray(value)) {
+    // Filter out items that should be omitted and check if array is empty
+    const filteredArray = value.filter((item) => !shouldOmitValue(item));
+
+    return filteredArray.length === 0;
+  }
+
+  return false;
 }
 
 export function updateDefaultValues(

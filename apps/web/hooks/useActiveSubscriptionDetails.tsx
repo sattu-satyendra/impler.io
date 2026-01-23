@@ -3,7 +3,6 @@ import { API_KEYS, NOTIFICATION_KEYS } from '@config';
 import { IErrorObject, ISubscriptionData } from '@impler/shared';
 import { usePlanMetaData } from 'store/planmeta.store.context';
 import { commonApi } from '@libs/api';
-import { useSubOSIntegration } from './useSubOSIntegration';
 import { IPlanMeta } from '@types';
 import { notify } from '@libs/notify';
 
@@ -12,7 +11,6 @@ interface UseActiveSubscriptionDetailProps {
 }
 
 export function useActiveSubscriptionDetails({ projectId }: UseActiveSubscriptionDetailProps) {
-  const subOSIntegration = useSubOSIntegration();
   const { meta, setPlanMeta } = usePlanMetaData();
 
   const {
@@ -48,8 +46,8 @@ export function useActiveSubscriptionDetails({ projectId }: UseActiveSubscriptio
   return {
     meta,
     activePlanDetails,
-    isActivePlanLoading: isLoading || subOSIntegration.loading,
-    subscriptionError: subscriptionError || subOSIntegration.error,
+    isActivePlanLoading: isLoading,
+    subscriptionError,
     refetchActivePlanDetails: refetchActiveSubscriptionDetails,
   };
 }

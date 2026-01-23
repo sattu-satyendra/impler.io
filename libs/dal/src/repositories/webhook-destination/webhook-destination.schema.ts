@@ -26,6 +26,14 @@ const webhookDestinationSchema = new Schema(
     retryCount: {
       type: Schema.Types.Number,
     },
+    singleRecordMode: {
+      type: Schema.Types.Boolean,
+      default: false,
+    },
+    flatArrayMode: {
+      type: Schema.Types.Boolean,
+      default: false,
+    },
   },
   { ...schemaOptions }
 );

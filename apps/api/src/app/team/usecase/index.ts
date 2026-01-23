@@ -26,7 +26,6 @@ export const USE_CASES = [
   TeamMemberMeta,
   LeadService,
   PaymentAPIService,
-  //
 ];
 export {
   Invite,
@@ -40,5 +39,4 @@ export {
   RevokeInvitation,
   DeclineInvitation,
   TeamMemberMeta,
-  PaymentAPIService,
 };

@@ -1,4 +1,3 @@
-version: '3'
 services:
   mongodb:
     image: mongo
@@ -18,7 +17,9 @@ services:
 
   api:
     privileged: true
-    image: 'ghcr.io/implerhq/impler/api:1.9.3'
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
     depends_on:
       - mongodb
       - rabbitmq
@@ -37,6 +38,7 @@ services:
       AZURE_STORAGE_CONTAINER: ${AZURE_STORAGE_CONTAINER}
       JWT_SECRET: ${JWT_SECRET}
       COOKIE_DOMAIN: ${COOKIE_DOMAIN}
+      SECURE_COOKIE: ${SECURE_COOKIE}
       RABBITMQ_CONN_URL: ${RABBITMQ_CONN_URL}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
@@ -56,7 +58,9 @@ services:
       - impler
 
   queue-manager:
-    image: 'ghcr.io/implerhq/impler/queue-manager:1.9.3'
+    build:
+      context: ..
+      dockerfile: apps/queue-manager/Dockerfile
     depends_on:
       - api
       - rabbitmq
@@ -84,7 +88,9 @@ services:
       - impler
 
   widget:
-    image: 'ghcr.io/implerhq/impler/widget:1.9.3'
+    build:
+      context: ..
+      dockerfile: apps/widget/Dockerfile
     depends_on:
       - api
     container_name: widget
@@ -102,7 +108,9 @@ services:
   embed:
     depends_on:
       - widget
-    image: 'ghcr.io/implerhq/impler/embed:1.9.3'
+    build:
+      context: ..
+      dockerfile: libs/embed/Dockerfile
     container_name: embed
     environment:
       WIDGET_URL: ${WIDGET_BASE_URL}
@@ -114,7 +122,12 @@ services:
   web:
     depends_on:
       - api
-    image: 'ghcr.io/implerhq/impler/web:1.9.3'
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${API_ROOT_URL}
+        NEXT_PUBLIC_EMBED_URL: ${WIDGET_EMBED_PATH}
     container_name: web
     environment:
       NEXT_PUBLIC_API_BASE_URL: ${API_ROOT_URL}
@@ -157,6 +170,8 @@ services:
       interval: 30s
       timeout: 20s
       retries: 3
+    networks:
+      - impler
 
   createbuckets:
     image: minio/mc
@@ -168,6 +183,8 @@ services:
       /usr/bin/mc mb myminio/impler;
       exit 0;
       "
+    networks:
+      - impler
 
 volumes:
   mongodb: ~

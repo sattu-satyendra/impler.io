@@ -1,11 +1,10 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
-import { API_KEYS, NOTIFICATION_KEYS } from '@config';
+import { API_KEYS } from '@config';
 import { commonApi } from '@libs/api';
 import { notify } from '@libs/notify';
 import { track } from '@libs/amplitude';
 import { IColumn, IErrorObject } from '@impler/shared';
-import { useSubscriptionMetaDataInformation } from './useSubscriptionMetaDataInformation';
 
 interface UseUpdateBulkColumnsProps {
   templateId: string;
@@ -13,13 +12,6 @@ interface UseUpdateBulkColumnsProps {
 }
 
 export const useUpdateBulkColumns = ({ onError, templateId }: UseUpdateBulkColumnsProps) => {
-  const {
-    advancedValidationsUnavailable,
-    freezeColumnsUnavailable,
-    requiredValidationUnavailable,
-    uniqueValidationUnavailable,
-    dateFormatUnavailable,
-  } = useSubscriptionMetaDataInformation();
   const queryClient = useQueryClient();
 
   const { mutate: updateColumnsInternal, isLoading: isUpdateColumsLoading } = useMutation<
@@ -44,70 +36,8 @@ export const useUpdateBulkColumns = ({ onError, templateId }: UseUpdateBulkColum
     }
   );
 
-  function checkImportConfig(columns: Partial<IColumn>[]) {
-    for (const column of columns) {
-      if (column.isRequired && requiredValidationUnavailable) {
-        notify(NOTIFICATION_KEYS.SUBSCRIPTION_FEATURE_NOT_INCLUDED_IN_CURRENT_PLAN, {
-          message: 'Required Validation',
-        });
-
-        return false;
-      }
-
-      if (column.isUnique && uniqueValidationUnavailable) {
-        notify(NOTIFICATION_KEYS.SUBSCRIPTION_FEATURE_NOT_INCLUDED_IN_CURRENT_PLAN, {
-          message: 'Unique Validation',
-        });
-
-        return false;
-      }
-
-      if (column.isFrozen && freezeColumnsUnavailable) {
-        notify(NOTIFICATION_KEYS.SUBSCRIPTION_FEATURE_NOT_INCLUDED_IN_CURRENT_PLAN, {
-          message: 'Freeze Columns',
-        });
-
-        return false;
-      }
-
-      if (advancedValidationsUnavailable || dateFormatUnavailable) {
-        let featureName = '';
-
-        switch (true) {
-          case !!column.regex:
-            featureName = 'Regex Validation';
-            break;
-
-          case !!column.allowMultiSelect:
-            featureName = 'Multi-Select';
-            break;
-
-          case !!(column.selectValues && column.selectValues.length > 0):
-            featureName = 'Select Values';
-            break;
-          case !!(column.dateFormats && column.dateFormats.length > 0):
-            featureName = 'Date Formats';
-            break;
-          default:
-            break;
-        }
-
-        if (featureName) {
-          notify(NOTIFICATION_KEYS.SUBSCRIPTION_FEATURE_NOT_INCLUDED_IN_CURRENT_PLAN, {
-            message: featureName,
-          });
-
-          return false;
-        }
-      }
-    }
-
-    return true;
-  }
   function updateColumns(data: Partial<IColumn>[]) {
-    if (!checkImportConfig(data)) {
-      return;
-    }
+    // All features enabled - no subscription checks needed
     updateColumnsInternal(data);
   }
 

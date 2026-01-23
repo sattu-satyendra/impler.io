@@ -186,8 +186,7 @@ export class TemplateController {
           _templateId: template._id,
           ...columnData,
         })),
-        template._id,
-        user.email
+        template._id
       );
     }
 
@@ -249,8 +248,7 @@ export class TemplateController {
         _templateId,
         ...columnData,
       })),
-      _templateId,
-      user.email
+      _templateId
     );
   }
 

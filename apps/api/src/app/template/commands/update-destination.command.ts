@@ -9,6 +9,7 @@ import {
   ValidateNested,
   IsObject,
   IsNotEmptyObject,
+  IsBoolean,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { BaseCommand } from '@shared/commands/base.command';
@@ -40,6 +41,14 @@ export class WebhookDestinationObject {
   @IsOptional()
   @IsNumber()
   retryCount?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  singleRecordMode?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  flatArrayMode?: boolean;
 }
 
 export class BubbleIoDestinationObject {

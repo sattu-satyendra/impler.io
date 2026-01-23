@@ -32,5 +32,4 @@ export {
   StartProcess,
   GetUploadData,
   UpdateRecords,
-  PaymentAPIService,
 };

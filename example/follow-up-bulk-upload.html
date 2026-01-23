@@ -1,0 +1,549 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Follow-Up Bulk Upload - Impler Demo</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+        padding: 40px;
+        max-width: 800px;
+        margin: 0 auto;
+        background-color: #f5f5f5;
+      }
+      h1 {
+        color: #333;
+        margin-bottom: 10px;
+      }
+      .description {
+        color: #666;
+        margin-bottom: 30px;
+      }
+      .config-section {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+      .config-section h3 {
+        margin-top: 0;
+        color: #444;
+      }
+      .form-group {
+        margin-bottom: 15px;
+      }
+      .form-group label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: 500;
+        color: #555;
+      }
+      .form-group input,
+      .form-group select {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+      }
+      .form-group input:focus,
+      .form-group select:focus {
+        outline: none;
+        border-color: #5f45ff;
+      }
+      button {
+        padding: 12px 24px;
+        font-size: 16px;
+        cursor: pointer;
+        border: none;
+        border-radius: 6px;
+        transition: all 0.2s;
+      }
+      button:disabled {
+        background-color: #ccc;
+        cursor: not-allowed;
+      }
+      #import-btn {
+        background-color: #5f45ff;
+        color: white;
+      }
+      #import-btn:hover:not(:disabled) {
+        background-color: #4a35cc;
+      }
+      .event-log {
+        background: #1e1e1e;
+        color: #d4d4d4;
+        padding: 15px;
+        border-radius: 8px;
+        font-family: 'Monaco', 'Menlo', monospace;
+        font-size: 12px;
+        max-height: 300px;
+        overflow-y: auto;
+      }
+      .event-log .event {
+        margin-bottom: 8px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid #333;
+      }
+      .event-log .event:last-child {
+        border-bottom: none;
+        margin-bottom: 0;
+        padding-bottom: 0;
+      }
+      .event-log .event-type {
+        color: #569cd6;
+        font-weight: bold;
+      }
+      .event-log .event-time {
+        color: #6a9955;
+      }
+      .note {
+        background: #fff3cd;
+        border: 1px solid #ffc107;
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+      }
+      .note strong {
+        color: #856404;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Follow-Up Bulk Upload</h1>
+    <p class="description">
+      Import customer follow-up tasks with customer identification and vehicle information. This example demonstrates
+      runtime schema similar to Osmos configuration.
+    </p>
+
+    <div class="config-section">
+      <h3>Configuration</h3>
+      <div class="form-group">
+        <label for="taskType">Task Type</label>
+        <select id="taskType">
+          <option value="MULTI_TYPE">Multi-Type (User selects source)</option>
+          <option value="SERVICE_REMINDER">Service Reminder</option>
+          <option value="SALES_FOLLOW_UP">Sales Follow Up</option>
+          <option value="APPOINTMENT_REMINDER">Appointment Reminder</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="dealerUuid">Dealer Department UUID</label>
+        <input type="text" id="dealerUuid" placeholder="Enter dealer department UUID" value="demo-dealer-uuid" />
+      </div>
+      <div class="form-group">
+        <label for="userUuid">User UUID</label>
+        <input type="text" id="userUuid" placeholder="Enter user UUID" value="demo-user-uuid" />
+      </div>
+    </div>
+
+    <button id="import-btn" disabled>Import Follow-Up Tasks</button>
+
+    <div class="config-section" style="margin-top: 20px">
+      <h3>Event Log</h3>
+      <div id="event-log" class="event-log">
+        <div class="event"><span class="event-time">[Waiting]</span> Widget loading...</div>
+      </div>
+    </div>
+
+    <script type="text/javascript" src="http://172.16.100.187:4701/embed.umd.min.js" async></script>
+    <script type="text/javascript">
+      // Configuration
+      const CONFIG = {
+        projectId: '6961782250e3751bc3a271dd',
+        templateId: '6966e3c74bf402b8e1a529e2',
+        accessToken: '90b73d4218e95cb5b9bb9c6fef86a862',
+      };
+
+      /**
+       * CUSTOM VALIDATION CODE
+       * ----------------------
+       * The following code should be set in the template's "Validate data in batch" section
+       * in the Impler dashboard.
+       *
+       * Validations:
+       * 1. When uploading a customer without Phone Number or Email Address, both First Name and Last Name must be provided.
+       * 2. When uploading a customer without VIN, at least one of First Name or Last Name must be provided.
+       *
+       * exports.code = async (params) => {
+       *   const errorRecords = [];
+       *
+       *   const isEmpty = (val) => val === undefined || val === null || val === '';
+       *
+       *   params.data.forEach((item) => {
+       *     const { record, index } = item;
+       *     const phoneNumber = record.phoneNumber;
+       *     const emailAddress = record.emailAddress;
+       *     const firstName = record.firstName;
+       *     const lastName = record.lastName;
+       *     const vin = record.vin;
+       *
+       *     const errors = {};
+       *
+       *     // Validation 1: If both phone and email are empty, both first and last name must be provided
+       *     if (isEmpty(phoneNumber) && isEmpty(emailAddress)) {
+       *       if (isEmpty(firstName) || isEmpty(lastName)) {
+       *         const errorMessage = 'Both First Name and Last Name are required when Phone Number and Email Address are not provided';
+       *
+       *         if (isEmpty(firstName)) {
+       *           errors.firstName = errorMessage;
+       *         }
+       *         if (isEmpty(lastName)) {
+       *           errors.lastName = errorMessage;
+       *         }
+       *       }
+       *     }
+       *
+       *     // Validation 2: If VIN is empty, at least one of first name or last name must be provided
+       *     if (isEmpty(vin)) {
+       *       if (isEmpty(firstName) && isEmpty(lastName)) {
+       *         const errorMessage = 'At least one of First Name or Last Name is required when VIN is not provided';
+       *
+       *         // Only set error if not already set by validation 1
+       *         if (!errors.firstName) {
+       *           errors.firstName = errorMessage;
+       *         }
+       *         if (!errors.lastName) {
+       *           errors.lastName = errorMessage;
+       *         }
+       *       }
+       *     }
+       *
+       *     if (Object.keys(errors).length > 0) {
+       *       errorRecords.push({ index, errors });
+       *     }
+       *   });
+       *
+       *   return errorRecords;
+       * };
+       */
+
+      // Generate unique identifiers
+      function generateUuid() {
+        return crypto.randomUUID
+          ? crypto.randomUUID()
+          : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+              const r = (Math.random() * 16) | 0;
+              const v = c === 'x' ? r : (r & 0x3) | 0x8;
+              return v.toString(16);
+            });
+      }
+
+      const widgetUuid = window.crypto.getRandomValues(new Uint32Array(1))[0];
+      const importBtn = document.getElementById('import-btn');
+      const eventLog = document.getElementById('event-log');
+      const taskTypeSelect = document.getElementById('taskType');
+
+      // Logging helper
+      function logEvent(type, data) {
+        const time = new Date().toLocaleTimeString();
+        const eventDiv = document.createElement('div');
+        eventDiv.className = 'event';
+        eventDiv.innerHTML = `
+          <span class="event-time">[${time}]</span>
+          <span class="event-type">${type}</span>
+          ${
+            data
+              ? `<pre style="margin: 5px 0 0 0; color: #ce9178; white-space: pre-wrap;">${JSON.stringify(
+                  data,
+                  null,
+                  2
+                )}</pre>`
+              : ''
+          }
+        `;
+        eventLog.insertBefore(eventDiv, eventLog.firstChild);
+      }
+
+      // Build schema based on task type (similar to Osmos configuration)
+      function buildSchema(taskType) {
+        const dealerUuid = document.getElementById('dealerUuid').value;
+        const userUuid = document.getElementById('userUuid').value;
+        const bulkUploadUuid = generateUuid();
+
+        const isMultiType = taskType === 'MULTI_TYPE';
+
+        const schema = [
+          // Source field - conditional based on task type
+          // If multi-type, user can select; otherwise it's fixed
+          isMultiType
+            ? {
+                key: 'source',
+                name: 'Source',
+                description: 'Source of follow up task',
+                type: 'Select',
+                selectValues: ['SERVICE_REMINDER', 'SALES_FOLLOW_UP', 'APPOINTMENT_REMINDER', 'RECALL', 'WARRANTY'],
+                isRequired: true,
+              }
+            : {
+                key: 'source',
+                name: 'Source',
+                description: 'Source of follow up task',
+                type: 'String',
+                defaultValue: taskType,
+                isFrozen: true,
+              },
+
+          // Task Name
+          {
+            key: 'taskName',
+            name: 'Task Name',
+            description: 'Task description',
+            type: 'String',
+            isRequired: true,
+          },
+
+          // Customer Identification Fields
+          {
+            key: 'firstName',
+            name: 'First Name',
+            description: 'First Name of the customer',
+            type: 'String',
+          },
+          {
+            key: 'lastName',
+            name: 'Last Name',
+            description: 'Last Name of the customer',
+            type: 'String',
+          },
+          {
+            key: 'customerKey',
+            name: 'Customer Key',
+            description: 'DMS Key of the customer',
+            type: 'String',
+          },
+          {
+            key: 'phoneNumber',
+            name: 'Phone Number',
+            description: 'Phone number of the customer (10 digits)',
+            type: 'Regex',
+            regex: '^(\\+\\d{1,3}( )?)?(((\\d{3}))|\\d{3})[- .]?\\d{3}[- .]?\\d{4}$',
+          },
+          {
+            key: 'emailAddress',
+            name: 'Email Address',
+            description: 'Email address of the customer',
+            type: 'Email',
+          },
+
+          // Vehicle Information
+          {
+            key: 'vin',
+            name: 'VIN',
+            description: "VIN of customer's vehicle",
+            type: 'String',
+            validations: [{ validate: 'length', min: 17, max: 17, errorMessage: 'VIN must be exactly 17 characters' }],
+          },
+          {
+            key: 'lastMileage',
+            name: 'Last Mileage',
+            description: "Last mileage of customer's vehicle",
+            type: 'Number',
+            validations: [
+              { validate: 'range', min: 0, max: 999999, errorMessage: 'Mileage must be between 0 and 999,999' },
+            ],
+          },
+          {
+            key: 'make',
+            name: 'Make',
+            description: "Make of customer's vehicle",
+            type: 'String',
+          },
+          {
+            key: 'model',
+            name: 'Model',
+            description: "Model of customer's vehicle",
+            type: 'String',
+          },
+          {
+            key: 'year',
+            name: 'Year',
+            description: "Year of customer's vehicle",
+            type: 'Number',
+            validations: [
+              { validate: 'range', min: 1900, max: 2030, errorMessage: 'Year must be between 1900 and 2030' },
+            ],
+          },
+        ];
+
+        return {
+          schema,
+          // Extra data to be passed with the import (similar to constantValue fields in Osmos)
+          extra: {
+            dealerDepartmentUuid: dealerUuid,
+            createdByUserUuid: userUuid,
+            bulkUploadRequestUUID: bulkUploadUuid,
+            taskType: taskType,
+          },
+        };
+      }
+
+      // Custom output format to match your backend expectations
+      // Includes UUIDs from extra data in each record
+      function buildOutputFormat(extra) {
+        return {
+          '%data%': {
+            dealerDepartmentUuid: extra.dealerDepartmentUuid,
+            createdBy: {
+              userUuid: extra.createdByUserUuid,
+            },
+            source: '{{source}}',
+            taskName: '{{taskName}}',
+            customerSearchIdentifiers: {
+              customerFName: '{{firstName}}',
+              customerLName: '{{lastName}}',
+              customerKey: '{{customerKey}}',
+              phoneNumber: '{{phoneNumber}}',
+              emailAddress: '{{emailAddress}}',
+            },
+            vehicle: {
+              vin: '{{vin}}',
+              lastMileage: '{{lastMileage}}',
+              make: '{{make}}',
+              model: '{{model}}',
+              year: '{{year}}',
+            },
+            additionalPropertiesDto: {
+              bulkUploadRequestUUID: extra.bulkUploadRequestUUID,
+            },
+          },
+          page: '{{page}}',
+          chunkSize: '{{chunkSize}}',
+          uploadId: '{{uploadId}}',
+          extra: '{{extra}}',
+          metadata: {
+            dealerDepartmentUuid: extra.dealerDepartmentUuid,
+            createdByUserUuid: extra.createdByUserUuid,
+            bulkUploadRequestUUID: extra.bulkUploadRequestUUID,
+            taskType: extra.taskType,
+          },
+        };
+      }
+
+      // Initialize widget when page loads
+      window.onload = function () {
+        if (window.impler) {
+          window.impler.init(widgetUuid);
+
+          // Check when widget is ready
+          const readyCheckInterval = setInterval(function () {
+            if (window.impler.isReady()) {
+              clearInterval(readyCheckInterval);
+              importBtn.removeAttribute('disabled');
+              logEvent('WIDGET_INITIALIZED', { uuid: widgetUuid });
+            }
+          }, 500);
+
+          // Event handlers
+          window.impler.on(
+            'message',
+            function (eventData) {
+              switch (eventData.type) {
+                case 'WIDGET_READY':
+                  logEvent('WIDGET_READY', null);
+                  break;
+
+                case 'CLOSE_WIDGET':
+                  logEvent('CLOSE_WIDGET', null);
+                  break;
+
+                case 'UPLOAD_STARTED':
+                  logEvent('UPLOAD_STARTED', eventData.value);
+                  break;
+
+                case 'UPLOAD_TERMINATED':
+                  logEvent('UPLOAD_TERMINATED', eventData.value);
+                  break;
+
+                case 'UPLOAD_COMPLETED':
+                  logEvent('UPLOAD_COMPLETED', {
+                    uploadId: eventData.value._id,
+                    totalRecords: eventData.value.totalRecords,
+                    validRecords: eventData.value.validRecords,
+                    invalidRecords: eventData.value.invalidRecords,
+                  });
+                  break;
+
+                case 'DATA_IMPORTED':
+                  logEvent('DATA_IMPORTED', {
+                    recordCount: eventData.value.length,
+                    sampleRecord: eventData.value[0],
+                  });
+
+                  // This is where you would call your backend API
+                  // Similar to the completionHandler in Osmos
+                  handleImportComplete(eventData.value);
+                  break;
+
+                default:
+                  logEvent(eventData.type, eventData.value);
+              }
+            },
+            widgetUuid
+          );
+        }
+      };
+
+      // Handle import completion (similar to Osmos completionHandler)
+      function handleImportComplete(importedData) {
+        console.log('Import completed with data:', importedData);
+
+        // Example: Call your backend API
+        // const extra = JSON.parse(importedData.extra || '{}');
+        // fetch('/api/bulk-upload/follow-up', {
+        //   method: 'POST',
+        //   headers: { 'Content-Type': 'application/json' },
+        //   body: JSON.stringify({
+        //     dealerDepartmentUuid: extra.dealerDepartmentUuid,
+        //     createdByUserUuid: extra.createdByUserUuid,
+        //     bulkUploadRequestUUID: extra.bulkUploadRequestUUID,
+        //     records: importedData,
+        //   }),
+        // });
+
+        logEvent('BACKEND_CALL', { message: 'Would call backend API here' });
+      }
+
+      // Import button click handler
+      importBtn.addEventListener('click', function () {
+        const taskType = taskTypeSelect.value;
+        const { schema, extra } = buildSchema(taskType);
+        const output = buildOutputFormat(extra);
+
+        logEvent('SHOW_WIDGET', { taskType, schemaFieldCount: schema.length, extra });
+
+        window.impler.show({
+          uuid: widgetUuid,
+          projectId: CONFIG.projectId,
+          templateId: CONFIG.templateId,
+          accessToken: CONFIG.accessToken,
+
+          // Runtime schema - this overrides any UI-defined schema
+          schema: schema,
+
+          // Custom output format for webhook/API calls
+          output: output,
+
+          // Extra data passed through to completion handler
+          extra: extra,
+
+          // UI customization
+          title: 'Import Follow-Up Tasks',
+          primaryColor: '#5f45ff',
+          colorScheme: 'light',
+
+          // Appearance
+          appearance: {
+            primaryColor: '#5f45ff',
+            borderRadius: '8px',
+          },
+        });
+      });
+    </script>
+  </body>
+</html>
